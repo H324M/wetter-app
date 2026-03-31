@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wettervorhersage nach PLZ</title>
+  <style>
+    :root {
+      --bg1: #0f172a;
+      --bg2: #1e293b;
+      --card: rgba(255,255,255,0.12);
+      --border: rgba(255,255,255,0.18);
+      --text: #eef2ff;
+      --muted: #cbd5e1;
+      --accent: #38bdf8;
+      --accent2: #22c55e;
+      --danger: #ef4444;
+      --shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 28%),
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.2), transparent 24%),
+        linear-gradient(135deg, var(--bg1), var(--bg2));
+      min-height: 100vh;
+    }
+
+    .container {
+      width: min(1180px, calc(100% - 32px));
+      margin: 32px auto 48px;
+    }
+
+    .hero, .card {
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .hero { padding: 28px; }
+    .card { padding: 24px; }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle, .muted { color: var(--muted); line-height: 1.6; }
+    .subtitle { margin: 0; max-width: 760px; }
+
+    form.search-panel {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 1.2fr auto auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    input, button {
+      height: 56px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      font-size: 1rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0 18px;
+      background: rgba(255,255,255,0.95);
+      color: #0f172a;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18);
+    }
+
+    button {
+      padding: 0 20px;
+      cursor: pointer;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 12px 24px rgba(22, 163, 74, 0.22);
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.7; cursor: wait; transform: none; }
+
+    .status {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      white-space: pre-wrap;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.12);
+      color: #fecaca;
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+
+    .status.success {
+      background: rgba(34, 197, 94, 0.12);
+      color: #dcfce7;
+      border-color: rgba(34, 197, 94, 0.24);
+    }
+
+    .overview {
+      margin-top: 28px;
+      display: none;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+
+    .location { color: var(--muted); margin-bottom: 8px; }
+    .eyebrow {
+      color: #bae6fd;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.78rem;
+      margin-bottom: 12px;
+    }
+    .current-icon { font-size: 4.8rem; line-height: 1; }
+    .big-temp {
+      font-size: clamp(3rem, 7vw, 5rem);
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      margin: 12px 0;
+    }
+    .summary { font-size: 1.15rem; font-weight: 600; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .metric {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .metric-label { color: var(--muted); font-size: 0.9rem; margin-bottom: 8px; }
+    .metric-value { font-size: 1.3rem; font-weight: 700; }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    .section { margin-top: 24px; display: none; }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .section-head h2 { margin: 0; font-size: 1.5rem; }
+
+    .chart-box { height: 320px; }
+    .chart-box svg { width: 100%; height: 100%; display: block; }
+
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .day-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 210px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.08));
+    }
+
+    .day-card.today::after,
+    .day-card.tomorrow::after {
+      content: attr(data-badge);
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: white;
+    }
+
+    .day-card.today::after { background: linear-gradient(135deg, #0ea5e9, #2563eb); }
+    .day-card.tomorrow::after { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+    .day-name { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+    .day-date { color: var(--muted); font-size: 0.92rem; margin-bottom: 14px; }
+    .day-icon { font-size: 2.6rem; margin-bottom: 8px; }
+    .day-desc { font-weight: 600; margin-bottom: 14px; min-height: 44px; }
+    .temps { display: flex; gap: 12px; align-items: baseline; margin-bottom: 14px; }
+    .temp-max { font-size: 1.6rem; font-weight: 800; }
+    .temp-min { color: var(--muted); font-size: 1rem; }
+    .day-meta { display: grid; gap: 8px; color: #e2e8f0; font-size: 0.94rem; }
+
+    .footer-note { margin-top: 18px; color: var(--muted); font-size: 0.93rem; line-height: 1.6; }
+
+    @media (max-width: 980px) {
+      .overview { grid-template-columns: 1fr; }
+      .forecast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      .container { width: min(100% - 20px, 100%); margin-top: 16px; }
+      .hero, .card { padding: 20px; }
+      form.search-panel { grid-template-columns: 1fr; }
+      .forecast-grid { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr; }
+      .chart-box { height: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1>Wettervorhersage nach Postleitzahl</h1>
+      <p class="subtitle">Gib eine deutsche Postleitzahl ein und erhalte die Vorhersage für heute, morgen und die folgenden 7 Tage.</p>
+
+      <form id="searchForm" class="search-panel">
+        <input id="postalCode" type="text" inputmode="numeric" maxlength="5" placeholder="z. B. 63834" aria-label="Postleitzahl" />
+        <button id="searchBtn" type="submit">Vorhersage laden</button>
+        <button id="exampleBtn" class="secondary" type="button">Beispiel: 80331</button>
+      </form>
+
+      <div id="status" class="status">Bereit. Bitte eine fünfstellige deutsche PLZ eingeben.</div>
+    </section>
+
+    <section id="overview" class="overview">
+      <article class="card">
+        <div class="location" id="locationLine"></div>
+        <div class="eyebrow" id="currentDayLine"></div>
+        <div id="currentIcon" class="current-icon">☀️</div>
+        <div id="currentTemp" class="big-temp">--°C</div>
+        <div id="currentSummary" class="summary">–</div>
+        <div id="highlights" class="pill-row"></div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Gefühlt</div><div id="metricFeels" class="metric-value">--°C</div></div>
+          <div class="metric"><div class="metric-label">Wind</div><div id="metricWind" class="metric-value">-- km/h</div></div>
+          <div class="metric"><div class="metric-label">Luftfeuchte</div><div id="metricHumidity" class="metric-value">-- %</div></div>
+          <div class="metric"><div class="metric-label">Niederschlag heute</div><div id="metricRain" class="metric-value">-- mm</div></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow">Morgen</div>
+        <h2 id="nextTitle" style="margin:0 0 8px;font-size:1.8rem;">–</h2>
+        <div id="nextSummary" class="muted">–</div>
+        <div class="pill-row" id="nextPills"></div>
+      </article>
+    </section>
+
+    <section id="chartSection" class="section">
+      <div class="card">
+        <div class="section-head">
+          <h2>Temperaturdiagramm</h2>
+          <div class="muted">Maximal- und Minimaltemperaturen der nächsten 9 Tage</div>
+        </div>
+        <div id="chartBox" class="chart-box"></div>
+      </div>
+    </section>
+
+    <section id="forecastSection" class="section">
+      <div class="section-head">
+        <h2>9-Tage-Übersicht</h2>
+        <div id="forecastNote" class="muted"></div>
+      </div>
+      <div id="forecastGrid" class="forecast-grid"></div>
+      <div class="footer-note">Die letzte PLZ wird lokal im Browser gespeichert.</div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var LAST_PLZ_KEY = 'weatherApp.lastPostalCode';
+      var postalCodeInput = document.getElementById('postalCode');
+      var searchForm = document.getElementById('searchForm');
+      var searchBtn = document.getElementById('searchBtn');
+      var exampleBtn = document.getElementById('exampleBtn');
+      var statusEl = document.getElementById('status');
+      var overviewEl = document.getElementById('overview');
+      var chartSectionEl = document.getElementById('chartSection');
+      var forecastSectionEl = document.getElementById('forecastSection');
+      var forecastGridEl = document.getElementById('forecastGrid');
+      var chartBoxEl = document.getElementById('chartBox');
+
+      var wmoMap = {
+        0: { text: 'Klarer Himmel', icon: '☀️' },
+        1: { text: 'Überwiegend klar', icon: '🌤️' },
+        2: { text: 'Teilweise bewölkt', icon: '⛅' },
+        3: { text: 'Bedeckt', icon: '☁️' },
+        45: { text: 'Neblig', icon: '🌫️' },
+        48: { text: 'Raureifnebel', icon: '🌫️' },
+        51: { text: 'Leichter Nieselregen', icon: '🌦️' },
+        53: { text: 'Mäßiger Nieselregen', icon: '🌦️' },
+        55: { text: 'Starker Nieselregen', icon: '🌧️' },
+        61: { text: 'Leichter Regen', icon: '🌦️' },
+        63: { text: 'Mäßiger Regen', icon: '🌧️' },
+        65: { text: 'Starker Regen', icon: '🌧️' },
+        71: { text: 'Leichter Schneefall', icon: '🌨️' },
+        73: { text: 'Mäßiger Schneefall', icon: '🌨️' },
+        75: { text: 'Starker Schneefall', icon: '❄️' },
+        80: { text: 'Leichte Regenschauer', icon: '🌦️' },
+        81: { text: 'Mäßige Regenschauer', icon: '🌧️' },
+        82: { text: 'Heftige Regenschauer', icon: '⛈️' },
+        95: { text: 'Gewitter', icon: '⛈️' },
+        96: { text: 'Gewitter mit leichtem Hagel', icon: '⛈️' },
+        99: { text: 'Gewitter mit starkem Hagel', icon: '⛈️' }
+      };
+
+      function setStatus(message, type) {
+        statusEl.textContent = message;
+        statusEl.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      function isGermanPostalCode(value) {
+        return /^\d{5}$/.test(value);
+      }
+
+      function formatTemp(value) {
+        return Math.round(Number(value)) + '°C';
+      }
+
+      function formatDate(dateString, options) {
+        return new Intl.DateTimeFormat('de-DE', options).format(new Date(dateString));
+      }
+
+      function weatherInfo(code) {
+        return wmoMap[code] || { text: 'Unbekannt', icon: '🌍' };
+      }
+
+      function savePostalCode(value) {
+        try { localStorage.setItem(LAST_PLZ_KEY, value); } catch (e) {}
+      }
+
+      function getPostalCode() {
+        try { return localStorage.getItem(LAST_PLZ_KEY); } catch (e) { return null; }
+      }
+
+      async function fetchJson(url) {
+        var response;
+        try {
+          response = await fetch(url, { method: 'GET' });
+        } catch (networkError) {
+          throw new Error('Netzwerkfehler. Bitte prüfen, ob Firefox externe API-Zugriffe blockiert oder die Datei lokal mit eingeschränkten Rechten läuft.');
+        }
+
+        if (!response.ok) {
+          throw new Error('Anfrage fehlgeschlagen (' + response.status + ').');
+        }
+
+        return await response.json();
+      }
+
+      async function geocodePostalCode(postalCode) {
+        var data = await fetchJson('https://api.zippopotam.us/de/' + encodeURIComponent(postalCode));
+        var place = data && data.places && data.places[0];
+        if (!place) {
+          throw new Error('Für diese PLZ wurde kein Ort gefunden.');
+        }
+        return {
+          postalCode: data['post code'] || postalCode,
+          country: data.country || 'Deutschland',
+          placeName: place['place name'] || '',
+          state: place.state || '',
+          latitude: Number(place.latitude),
+          longitude: Number(place.longitude)
+        };
+      }
+
+      async function fetchForecast(lat, lon) {
+        var url = new URL('https://api.open-meteo.com/v1/forecast');
+        url.searchParams.set('latitude', String(lat));
+        url.searchParams.set('longitude', String(lon));
+        url.searchParams.set('current', 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code');
+        url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset');
+        url.searchParams.set('forecast_days', '9');
+        url.searchParams.set('timezone', 'auto');
+        return await fetchJson(url.toString());
+      }
+
+      function buildLocation(place) {
+        var parts = [place.placeName, place.state, place.country].filter(Boolean);
+        return place.postalCode + ' ' + parts.join(', ');
+      }
+
+      function renderSvgChart(daily) {
+        var labels = daily.time.map(function (d) { return formatDate(d, { weekday: 'short', day: '2-digit' }); });
+        var maxTemps = daily.temperature_2m_max.map(Number);
+        var minTemps = daily.temperature_2m_min.map(Number);
+        var values = maxTemps.concat(minTemps);
+        var minValue = Math.floor(Math.min.apply(null, values) - 2);
+        var maxValue = Math.ceil(Math.max.apply(null, values) + 2);
+
+        var width = 1000;
+        var height = 320;
+        var pad = { left: 54, right: 18, top: 18, bottom: 50 };
+        var innerW = width - pad.left - pad.right;
+        var innerH = height - pad.top - pad.bottom;
+
+        function x(i) {
+          return pad.left + (labels.length === 1 ? innerW / 2 : (i * innerW) / (labels.length - 1));
+        }
+        function y(v) {
+          return pad.top + innerH - ((v - minValue) / (maxValue - minValue || 1)) * innerH;
+        }
+        function points(arr) {
+          return arr.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ');
+        }
+
+        var grid = '';
+        for (var i = 0; i <= 4; i++) {
+          var yy = pad.top + (innerH / 4) * i;
+          var temp = Math.round(maxValue - ((maxValue - minValue) / 4) * i);
+          grid += '<line x1="' + pad.left + '" y1="' + yy + '" x2="' + (width - pad.right) + '" y2="' + yy + '" stroke="rgba(255,255,255,0.12)" />';
+          grid += '<text x="' + (pad.left - 10) + '" y="' + (yy + 4) + '" text-anchor="end" fill="#cbd5e1" font-size="12">' + temp + '°</text>';
+        }
+
+        var dotsMax = maxTemps.map(function (v, i) {
+          return '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="4" fill="#38bdf8" />';
+        }).join('');
+        var dotsMin = minTemps.map(function (v, i) {
+          return '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="4" fill="#22c55e" />';
+        }).join('');
+        var xLabels = labels.map(function (label, i) {
+          return '<text x="' + x(i) + '" y="' + (height - 18) + '" text-anchor="middle" fill="#cbd5e1" font-size="12">' + label + '</text>';
+        }).join('');
+
+        chartBoxEl.innerHTML = '' +
+          '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" aria-label="Temperaturdiagramm">' +
+            grid +
+            '<polyline fill="none" stroke="#38bdf8" stroke-width="3" points="' + points(maxTemps) + '" />' +
+            '<polyline fill="none" stroke="#22c55e" stroke-width="3" points="' + points(minTemps) + '" />' +
+            dotsMax + dotsMin + xLabels +
+            '<text x="' + pad.left + '" y="16" fill="#38bdf8" font-size="13" font-weight="700">Max</text>' +
+            '<text x="' + (pad.left + 50) + '" y="16" fill="#22c55e" font-size="13" font-weight="700">Min</text>' +
+          '</svg>';
+      }
+
+      function renderWeather(place, weather) {
+        var daily = weather.daily;
+        var current = weather.current;
+        var todayInfo = weatherInfo(current.weather_code);
+        var tomorrowInfo = weatherInfo(daily.weather_code[1]);
+
+        document.getElementById('locationLine').textContent = buildLocation(place);
+        document.getElementById('currentDayLine').textContent = formatDate(daily.time[0], { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+        document.getElementById('currentIcon').textContent = todayInfo.icon;
+        document.getElementById('currentTemp').textContent = formatTemp(current.temperature_2m);
+        document.getElementById('currentSummary').textContent = todayInfo.text;
+        document.getElementById('metricFeels').textContent = formatTemp(current.apparent_temperature);
+        document.getElementById('metricWind').textContent = Math.round(Number(current.wind_speed_10m)) + ' km/h';
+        document.getElementById('metricHumidity').textContent = Math.round(Number(current.relative_humidity_2m)) + ' %';
+        document.getElementById('metricRain').textContent = Number(daily.precipitation_sum[0] || 0).toFixed(1) + ' mm';
+
+        document.getElementById('highlights').innerHTML = [
+          'Max ' + formatTemp(daily.temperature_2m_max[0]),
+          'Min ' + formatTemp(daily.temperature_2m_min[0]),
+          'Sonnenaufgang ' + formatDate(daily.sunrise[0], { hour: '2-digit', minute: '2-digit' }),
+          'Sonnenuntergang ' + formatDate(daily.sunset[0], { hour: '2-digit', minute: '2-digit' })
+        ].map(function (item) {
+          return '<span class="pill">' + item + '</span>';
+        }).join('');
+
+        document.getElementById('nextTitle').textContent = formatDate(daily.time[1], { weekday: 'long', day: '2-digit', month: '2-digit' });
+        document.getElementById('nextSummary').textContent = tomorrowInfo.icon + ' ' + tomorrowInfo.text;
+        document.getElementById('nextPills').innerHTML = [
+          'Max ' + formatTemp(daily.temperature_2m_max[1]),
+          'Min ' + formatTemp(daily.temperature_2m_min[1]),
+          'Regenrisiko ' + Math.round(Number(daily.precipitation_probability_max[1] || 0)) + ' %',
+          'Wind bis ' + Math.round(Number(daily.wind_speed_10m_max[1] || 0)) + ' km/h'
+        ].map(function (item) {
+          return '<span class="pill">' + item + '</span>';
+        }).join('');
+
+        forecastGridEl.innerHTML = daily.time.map(function (date, index) {
+          var info = weatherInfo(daily.weather_code[index]);
+          var badge = index === 0 ? 'Heute' : index === 1 ? 'Morgen' : '';
+          var cls = index === 0 ? 'today' : index === 1 ? 'tomorrow' : '';
+          return '' +
+            '<article class="card day-card ' + cls + '"' + (badge ? ' data-badge="' + badge + '"' : '') + '>' +
+              '<div class="day-name">' + formatDate(date, { weekday: 'long' }) + '</div>' +
+              '<div class="day-date">' + formatDate(date, { day: '2-digit', month: '2-digit', year: 'numeric' }) + '</div>' +
+              '<div class="day-icon">' + info.icon + '</div>' +
+              '<div class="day-desc">' + info.text + '</div>' +
+              '<div class="temps"><div class="temp-max">' + formatTemp(daily.temperature_2m_max[index]) + '</div><div class="temp-min">' + formatTemp(daily.temperature_2m_min[index]) + '</div></div>' +
+              '<div class="day-meta">' +
+                '<div>💧 Niederschlag: ' + Number(daily.precipitation_sum[index] || 0).toFixed(1) + ' mm</div>' +
+                '<div>☔ Regenrisiko: ' + Math.round(Number(daily.precipitation_probability_max[index] || 0)) + ' %</div>' +
+                '<div>💨 Wind: bis ' + Math.round(Number(daily.wind_speed_10m_max[index] || 0)) + ' km/h</div>' +
+              '</div>' +
+            '</article>';
+        }).join('');
+
+        document.getElementById('forecastNote').textContent = 'Zeitraum: ' +
+          formatDate(daily.time[0], { day: '2-digit', month: '2-digit' }) + ' bis ' +
+          formatDate(daily.time[daily.time.length - 1], { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        renderSvgChart(daily);
+        overviewEl.style.display = 'grid';
+        chartSectionEl.style.display = 'block';
+        forecastSectionEl.style.display = 'block';
+        setStatus('Vorhersage für ' + buildLocation(place) + ' erfolgreich geladen.', 'success');
+      }
+
+      async function loadWeather(postalCode) {
+        if (!isGermanPostalCode(postalCode)) {
+          setStatus('Bitte genau fünf Ziffern als deutsche PLZ eingeben.', 'error');
+          return;
+        }
+
+        searchBtn.disabled = true;
+        setStatus('PLZ wird gesucht und Wetterdaten werden geladen ...');
+
+        try {
+          var place = await geocodePostalCode(postalCode);
+          var weather = await fetchForecast(place.latitude, place.longitude);
+          savePostalCode(postalCode);
+          renderWeather(place, weather);
+        } catch (error) {
+          overviewEl.style.display = 'none';
+          chartSectionEl.style.display = 'none';
+          forecastSectionEl.style.display = 'none';
+          setStatus(error && error.message ? error.message : 'Es ist ein unerwarteter Fehler aufgetreten.', 'error');
+          console.error(error);
+        } finally {
+          searchBtn.disabled = false;
+        }
+      }
+
+      searchForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        loadWeather(postalCodeInput.value.trim());
+      });
+
+      exampleBtn.addEventListener('click', function () {
+        postalCodeInput.value = '80331';
+        loadWeather('80331');
+      });
+
+      window.addEventListener('error', function (event) {
+        setStatus('JavaScript-Fehler: ' + event.message, 'error');
+      });
+
+      postalCodeInput.value = getPostalCode() || '63834';
+    })();
+  </script>
+</body>
+</html>
